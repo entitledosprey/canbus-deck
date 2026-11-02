@@ -1,0 +1,8 @@
+[package]
+name = "can-bench"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+libc = "0.2"
+socketcan = "3"

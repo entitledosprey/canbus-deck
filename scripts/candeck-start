@@ -1,0 +1,73 @@
+#!/bin/bash
+# Desktop launcher: find the bitrate, capture, and open the sniffer.
+# Quitting the sniffer stops the capture.
+
+IFACE="${CANDECK_IFACE:-can0}"
+CANDECK="${CANDECK_BIN:-/usr/local/bin/candeck}"
+OUT=$(mktemp /tmp/candeck-start.XXXXXX)
+DAEMON=""
+
+finish() {
+    if [ -n "$DAEMON" ]; then
+        kill "$DAEMON" 2>/dev/null
+        wait "$DAEMON" 2>/dev/null
+    fi
+    rm -f "$OUT"
+}
+trap finish EXIT
+trap 'exit 0' HUP INT TERM
+
+pause() {
+    echo
+    read -r -n 1 -s -p "Press any key to close."
+}
+
+if ! ip link show dev "$IFACE" >/dev/null 2>&1; then
+    echo "No $IFACE found. Plug in the PEAK adapter, then try again."
+    pause
+    exit 1
+fi
+
+if pgrep -f "candeck daemon $IFACE" >/dev/null; then
+    echo "A capture on $IFACE is already running, so this window will not start or stop it."
+    "$CANDECK" sniff
+    exit 0
+fi
+
+if [[ "$IFACE" != vcan* ]]; then
+    echo "Finding the bitrate on $IFACE (listen-only). This can take up to 20 seconds..."
+    if ! sudo -n "$CANDECK" detect "$IFACE" 2>&1 | tee "$OUT"; then
+        pause
+        exit 1
+    fi
+    if ! grep -q '^detected' "$OUT"; then
+        pause
+        exit 1
+    fi
+fi
+
+"$CANDECK" daemon "$IFACE" >"$OUT" 2>&1 &
+DAEMON=$!
+sleep 1
+if ! kill -0 "$DAEMON" 2>/dev/null; then
+    DAEMON=""
+    echo "Capture failed to start:"
+    cat "$OUT"
+    pause
+    exit 1
+fi
+
+"$CANDECK" sniff
+SNIFF_STATUS=$?
+
+kill "$DAEMON" 2>/dev/null
+wait "$DAEMON" 2>/dev/null
+DAEMON=""
+
+echo
+[ "$SNIFF_STATUS" -eq 0 ] || echo "The sniffer exited with an error."
+echo "Capture stopped."
+cat "$OUT"
+echo
+"$CANDECK" compare
+pause

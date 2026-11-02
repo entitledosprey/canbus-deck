@@ -1,0 +1,12 @@
+[package]
+name = "candeck"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+crossterm = "0.28"
+libc = "0.2"
+ratatui = "0.29"
+serde_json = "1"

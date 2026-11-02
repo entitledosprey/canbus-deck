@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=CAN Sniffer
+Comment=Find the bitrate, capture, and open the live sniffer (listen-only)
+Exec=/usr/local/bin/candeck-start
+Icon=network-wired
+Terminal=true
+Categories=Development;

@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test --release --locked -p candeck
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [aarch64, x86_64]
+    env:
+      # Statically linked, so the binaries run on any Linux with no dependencies.
+      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: rust-lld
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add ${{ matrix.arch }}-unknown-linux-musl
+      - run: cargo build --release --locked -p candeck --target ${{ matrix.arch }}-unknown-linux-musl
+      - name: Package
+        run: |
+          NAME=candeck-${{ matrix.arch }}-linux
+          mkdir "$NAME"
+          cp target/${{ matrix.arch }}-unknown-linux-musl/release/candeck "$NAME/"
+          cp scripts/candeck-start scripts/install.sh "scripts/CAN Sniffer.desktop" README.md "$NAME/"
+          tar czf "$NAME.tar.gz" "$NAME"
+          sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candeck-${{ matrix.arch }}
+          path: candeck-${{ matrix.arch }}-linux.tar.gz*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes candeck-*
+        env:
+          GH_TOKEN: ${{ github.token }}
